@@ -439,3 +439,80 @@ export const getAnnouncementByComment = async (commentId) => {
 
   return data;
 };
+
+/**
+ * Toggles the current user's like on an announcement (`announcement_likes`).
+ */
+export const likeAnnouncement = async ({ announcement_id, user_id }) => {
+  if (!announcement_id || !user_id) {
+    throw new Error("announcement_id and user_id is required!");
+  }
+
+  const { data: likeExist, error: checkError } = await supabase
+    .from("announcement_likes")
+    .select("id")
+    .eq("announcement_id", announcement_id)
+    .eq("user_id", user_id);
+
+  if (checkError) {
+    throw new Error(checkError.message || "Error checking like");
+  }
+
+  if (likeExist.length > 0) {
+    const { error } = await supabase
+      .from("announcement_likes")
+      .delete()
+      .eq("announcement_id", announcement_id)
+      .eq("user_id", user_id);
+
+    if (error) {
+      throw new Error(error.message || "Error removing like");
+    }
+  } else {
+    const { error } = await supabase
+      .from("announcement_likes")
+      .insert([{ announcement_id, user_id }]);
+
+    if (error) {
+      throw new Error(error.message || "Error adding like");
+    }
+  }
+};
+
+export const getAnnouncementLikeStatus = async ({
+  announcement_id,
+  user_id,
+}) => {
+  if (!announcement_id || !user_id) {
+    throw new Error("announcement_id and user_id is required!");
+  }
+
+  const { data, error } = await supabase
+    .from("announcement_likes")
+    .select("id")
+    .eq("announcement_id", announcement_id)
+    .eq("user_id", user_id);
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  return { isLiked: data.length > 0 };
+};
+
+export const getAnnouncementLikeCount = async ({ announcement_id }) => {
+  if (!announcement_id) {
+    throw new Error("announcement_id is required!");
+  }
+
+  const { error, count } = await supabase
+    .from("announcement_likes")
+    .select("*", { count: "exact", head: true })
+    .eq("announcement_id", announcement_id);
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  return count;
+};
