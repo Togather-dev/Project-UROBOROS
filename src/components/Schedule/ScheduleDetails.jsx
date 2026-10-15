@@ -52,6 +52,7 @@ import {
   formatEventDate,
   formatEventTimeCompact,
 } from "@/lib/utils";
+import { buildEventQrPayload, EVENT_QR_OPTIONS } from "@/lib/eventQr";
 import { Label } from "../ui/label";
 import { useToast } from "@/hooks/use-toast";
 import AddRecord from "./AddRecord";
@@ -104,6 +105,7 @@ const useFetchAllMinistryVolunteers = (userId) => {
 
 const ScheduleDetails = () => {
   const [qrCode, setQRCode] = useState(null);
+  const [qrError, setQrError] = useState(false);
   const [disableSchedule, setDisableSchedule] = useState(false);
   const [urlPrms, setUrlPrms] = useSearchParams();
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
@@ -365,15 +367,31 @@ const ScheduleDetails = () => {
     }
   }, [debouncedSearch, attendance?.data]);
 
-  const generateQRCode = async () => {
-    try {
-      const res = await QRCode.toDataURL(event.id);
-      setQRCode(res);
-      return res;
-    } catch (error) {
-      console.error("Error generating QR code:", error.message);
+  // Generate the check-in QR for the loaded event (see lib/eventQr.js)
+  useEffect(() => {
+    let cancelled = false;
+    setQRCode(null);
+
+    const payload = buildEventQrPayload(event?.id);
+    if (!payload) {
+      setQrError(true);
+      return;
     }
-  };
+    setQrError(false);
+
+    QRCode.toDataURL(payload, EVENT_QR_OPTIONS)
+      .then((url) => {
+        if (!cancelled) setQRCode(url);
+      })
+      .catch((error) => {
+        console.error("Error generating QR code:", error.message);
+        if (!cancelled) setQrError(true);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [event?.id]);
 
   const onRowAttend = async (attendeeId, state) => {
     try {
@@ -531,7 +549,7 @@ const ScheduleDetails = () => {
             )}
             <div className="flex gap-x-2">
               <div>
-                <Dialog onOpenChange={generateQRCode}>
+                <Dialog>
                   <DialogTrigger asChild>
                     <Button>
                       <Icon icon={"mingcute:qrcode-2-line"} />
@@ -545,7 +563,22 @@ const ScheduleDetails = () => {
                       </DialogDescription>
                     </DialogHeader>
                     <div className="flex justify-center">
-                      <img src={qrCode} alt="QR Code" className="h-64 w-64" />
+                      {qrError ? (
+                        <p
+                          role="alert"
+                          className="text-center text-sm font-semibold text-red-500"
+                        >
+                          QR code unavailable: this event has no valid ID.
+                        </p>
+                      ) : (
+                        qrCode && (
+                          <img
+                            src={qrCode}
+                            alt="QR Code"
+                            className="h-80 w-80 max-w-full"
+                          />
+                        )
+                      )}
                     </div>
                   </DialogContent>
                 </Dialog>
