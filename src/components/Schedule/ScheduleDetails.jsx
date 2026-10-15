@@ -51,6 +51,7 @@ import {
   exportAttendanceList,
   formatEventDate,
   formatEventTimeCompact,
+  volunteerName,
 } from "@/lib/utils";
 import { buildEventQrPayload, EVENT_QR_OPTIONS } from "@/lib/eventQr";
 import { Label } from "../ui/label";
@@ -173,10 +174,20 @@ const ScheduleDetails = () => {
     },
   });
 
-  const { data: eventVolunteers, isLoading: _volunteersLoading } = useQuery({
+  const {
+    data: eventVolunteers,
+    isLoading: _volunteersLoading,
+    isError: volunteersError,
+  } = useQuery({
     queryKey: ["event_volunteers", eventId],
     queryFn: async () => {
       const response = await fetchEventVolunteers(eventId);
+      // fetchEventVolunteers reports failure in its return value rather than
+      // throwing; without this the query resolves to undefined and the list
+      // is silently blank.
+      if (!response.success) {
+        throw new Error(response.error);
+      }
       return response.data;
     },
     enabled: !!eventId,
@@ -706,6 +717,11 @@ const ScheduleDetails = () => {
             </DialogContent>
           </Dialog>
         </div>
+        {volunteersError && (
+          <p role="alert" className="text-sm text-red-500">
+            Couldn&apos;t load volunteers. Please refresh and try again.
+          </p>
+        )}
         {eventVolunteers?.map((volunteer, i) => (
           <div key={i} className="flex gap-2">
             <p>{`${i + 1}.`}</p>
@@ -713,11 +729,11 @@ const ScheduleDetails = () => {
               className={cn("text-primary-text", {
                 "line-through": volunteer.replaced === true,
               })}
-            >{`${volunteer.users.first_name.toFirstUpperCase()} ${volunteer.users.last_name.toFirstUpperCase()} `}</p>
+            >{`${volunteerName(volunteer.users)} `}</p>
             {volunteer?.volunteer_replacement && (
-              <p
-                className={"text-primary-text"}
-              >{`${volunteer?.volunteer_replacement?.first_name.toFirstUpperCase()} ${volunteer?.volunteer_replacement?.last_name.toFirstUpperCase()}`}</p>
+              <p className={"text-primary-text"}>
+                {volunteerName(volunteer.volunteer_replacement)}
+              </p>
             )}
 
             <div className="flex items-center justify-center gap-2">
@@ -752,8 +768,8 @@ const ScheduleDetails = () => {
                     <DialogTitle>
                       Remove
                       {!volunteer?.volunteer_replacement
-                        ? `${volunteer.users.first_name.toFirstUpperCase()} ${volunteer.users.last_name.toFirstUpperCase()} `
-                        : `${volunteer?.volunteer_replacement?.first_name.toFirstUpperCase()} ${volunteer?.volunteer_replacement?.last_name.toFirstUpperCase()}?`}
+                        ? ` ${volunteerName(volunteer.users)} `
+                        : ` ${volunteerName(volunteer.volunteer_replacement)}?`}
                     </DialogTitle>
                     <DialogDescription>
                       Are you sure you want to remove this volunteer?

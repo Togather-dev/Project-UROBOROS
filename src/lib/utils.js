@@ -236,15 +236,34 @@ const getInitial = (name) => {
   return firstWord ? firstWord[0].toUpperCase() : "";
 };
 
+/**
+ * Formats a volunteer's display name from an embedded profile row.
+ *
+ * The embed is null when the volunteer has no matching row (the select is a
+ * left join), so callers can't dereference it directly.
+ *
+ * @param {{ first_name?: string, last_name?: string } | null} [person]
+ * @returns {string} The capitalised full name, or "Unknown volunteer".
+ */
+const volunteerName = (person) => {
+  const capitalise = (value) =>
+    typeof value === "string" && value
+      ? value.charAt(0).toUpperCase() + value.slice(1)
+      : "";
+  const name = [capitalise(person?.first_name), capitalise(person?.last_name)]
+    .filter(Boolean)
+    .join(" ");
+  return name || "Unknown volunteer";
+};
+
 const downloadExcel = (event, eventvolunteers, attendance, attendanceCount) => {
   // Get the list of volunteers and replacement volunteers
   const volunteerList = eventvolunteers
-    ? eventvolunteers.map((volunteer) => {
-        if (!volunteer?.replaced) {
-          return `${volunteer?.users?.first_name?.toFirstUpperCase()} ${volunteer?.users?.last_name?.toFirstUpperCase()}`;
-        }
-        return `${volunteer?.volunteer_replacement?.first_name?.toFirstUpperCase()} ${volunteer?.volunteer_replacement?.last_name?.toFirstUpperCase()}`;
-      })
+    ? eventvolunteers.map((volunteer) =>
+        volunteerName(
+          volunteer?.replaced ? volunteer?.volunteer_replacement : volunteer?.users
+        )
+      )
     : [];
 
   const headings = [
@@ -363,11 +382,7 @@ const exportAttendanceList = (
 
     eventvolunteers.forEach((volunteer, index) => {
       doc.setFontSize(12);
-      doc.text(
-        `${index + 1}. ${volunteer.users.first_name.charAt(0).toUpperCase() + volunteer.users.first_name.slice(1)} ${volunteer.users.last_name.charAt(0).toUpperCase() + volunteer.users.last_name.slice(1)}`,
-        10,
-        currentY
-      );
+      doc.text(`${index + 1}. ${volunteerName(volunteer.users)}`, 10, currentY);
       currentY += 7; // Spacing for each volunteer
     });
 
@@ -528,4 +543,5 @@ export {
   formatEventTime,
   convertTimeStringToDate,
   formatEventTimeCompact,
+  volunteerName,
 };

@@ -71,9 +71,11 @@ export const createEvent = async (eventData) => {
     eventPosterImage,
   } = eventData;
 
+  let imagePath = null;
+  let createdEventId = null;
+
   try {
     //  Upload the image (if provided)
-    let imagePath = null;
     if (eventPosterImage) {
       const { data: uploadData, error: uploadError } = await supabase.storage
         .from("Uroboros")
@@ -107,12 +109,10 @@ export const createEvent = async (eventData) => {
       .single(); // Single object
 
     if (eventError) {
-      if (imagePath) {
-        await deleteImageFromStorage();
-      } else {
-        throw new Error(eventError.message); // Handle any errors
-      }
+      throw new Error(eventError.message);
     }
+
+    createdEventId = event.id;
 
     // Step 2: Insert assigned volunteers into event_volunteers table
     if (assignVolunteer?.length > 0) {
@@ -134,7 +134,22 @@ export const createEvent = async (eventData) => {
     return { success: true, data: event };
   } catch (error) {
     console.error("Error creating event:", error);
-    return { success: false, error: error.message };
+
+    // Undo the partial create so a retry doesn't leave a duplicate event
+    // (or an orphaned poster) behind.
+    if (createdEventId) {
+      const { error: rollbackError } = await supabase
+        .from("events")
+        .delete()
+        .eq("id", createdEventId);
+      if (rollbackError) {
+        console.error("Error rolling back event:", rollbackError.message);
+      }
+    }
+    await deleteImageFromStorage(imagePath);
+
+    // Rethrow so the mutation's onError runs instead of reporting success.
+    throw error;
   }
 };
 
@@ -811,13 +826,11 @@ export const fetchEventVolunteers = async (eventId) => {
         replacedby_id,
         users:volunteer_id (
           first_name,
-          last_name,
-          email
+          last_name
         ),
          volunteer_replacement:replacedby_id (
           first_name,
-          last_name,
-          email
+          last_name
         )
         `
       )

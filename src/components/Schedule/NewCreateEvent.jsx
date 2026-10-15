@@ -516,14 +516,9 @@ const NewCreateEventForm = () => {
                           <Switch
                             {...field}
                             checked={field.value}
-                            onCheckedChange={(checked) => {
-                              field.onChange(checked);
-                              // Reset time and volunteers if checked
-                              if (checked) {
-                                form.setValue("eventTime", null);
-                                form.setValue("assignVolunteer", []);
-                              }
-                            }}
+                            // Time and volunteers are cleared by the effect
+                            // above when the switch is turned off.
+                            onCheckedChange={field.onChange}
                           />
                         </div>
                       </FormControl>
