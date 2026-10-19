@@ -13,6 +13,7 @@ import { Button } from "../ui/button";
 import { Icon } from "@iconify/react";
 
 import { useUser } from "@/context/useUser";
+import { parseEventQrPayload } from "@/lib/eventQr";
 import QRScannedFamilyData from "./QRScannedFamilyData";
 
 const QrScannerEvents = ({ eventData }) => {
@@ -26,13 +27,13 @@ const QrScannerEvents = ({ eventData }) => {
 
   const handleGetQrResult = (result) => {
     if (result && Array.isArray(result)) {
-      const scannedEventId = result[0]?.rawValue; // scanned result
-      setselectedEvent(scannedEventId);
+      const scannedEventId = parseEventQrPayload(result[0]?.rawValue); // scanned result
+      setselectedEvent(scannedEventId ?? "");
 
       // Check if the scanned eventId exists in the eventData
-      const matchedEvent = eventData?.find(
-        (event) => event.id === scannedEventId
-      );
+      const matchedEvent =
+        scannedEventId &&
+        eventData?.find((event) => event.id === scannedEventId);
 
       if (matchedEvent) {
         setIsValidQr(true); // Valid QR code

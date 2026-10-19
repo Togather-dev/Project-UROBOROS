@@ -42,7 +42,7 @@ import {
 import { Button } from "../ui/button";
 import { useUser } from "@/context/useUser";
 import Comments from "../Comments";
-import TriggerLikeIcon from "../CommentComponents/TriggerLikeIcon";
+import AnnouncementLikeButton from "./AnnouncementLikeButton";
 import AnnouncementForm from "./AnnouncementForm";
 import { useState } from "react";
 import { cn } from "@/lib/utils";
@@ -335,11 +335,10 @@ const Announcement = ({
 
       <div className="flex items-end justify-between">
         <div className="relative h-5">
-          <TriggerLikeIcon
+          <AnnouncementLikeButton
             className={"absolute w-14 rounded-3xl bg-white p-1"}
-            comment_id={announcement?.id}
+            announcement_id={announcement?.id}
             user_id={userData?.id}
-            columnName={"announcement_id"}
           />
         </div>
       </div>

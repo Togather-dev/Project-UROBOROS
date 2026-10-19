@@ -51,7 +51,9 @@ import {
   exportAttendanceList,
   formatEventDate,
   formatEventTimeCompact,
+  volunteerName,
 } from "@/lib/utils";
+import { buildEventQrPayload, EVENT_QR_OPTIONS } from "@/lib/eventQr";
 import { Label } from "../ui/label";
 import { useToast } from "@/hooks/use-toast";
 import AddRecord from "./AddRecord";
@@ -104,6 +106,7 @@ const useFetchAllMinistryVolunteers = (userId) => {
 
 const ScheduleDetails = () => {
   const [qrCode, setQRCode] = useState(null);
+  const [qrError, setQrError] = useState(false);
   const [disableSchedule, setDisableSchedule] = useState(false);
   const [urlPrms, setUrlPrms] = useSearchParams();
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
@@ -171,10 +174,20 @@ const ScheduleDetails = () => {
     },
   });
 
-  const { data: eventVolunteers, isLoading: _volunteersLoading } = useQuery({
+  const {
+    data: eventVolunteers,
+    isLoading: _volunteersLoading,
+    isError: volunteersError,
+  } = useQuery({
     queryKey: ["event_volunteers", eventId],
     queryFn: async () => {
       const response = await fetchEventVolunteers(eventId);
+      // fetchEventVolunteers reports failure in its return value rather than
+      // throwing; without this the query resolves to undefined and the list
+      // is silently blank.
+      if (!response.success) {
+        throw new Error(response.error);
+      }
       return response.data;
     },
     enabled: !!eventId,
@@ -365,15 +378,31 @@ const ScheduleDetails = () => {
     }
   }, [debouncedSearch, attendance?.data]);
 
-  const generateQRCode = async () => {
-    try {
-      const res = await QRCode.toDataURL(event.id);
-      setQRCode(res);
-      return res;
-    } catch (error) {
-      console.error("Error generating QR code:", error.message);
+  // Generate the check-in QR for the loaded event (see lib/eventQr.js)
+  useEffect(() => {
+    let cancelled = false;
+    setQRCode(null);
+
+    const payload = buildEventQrPayload(event?.id);
+    if (!payload) {
+      setQrError(true);
+      return;
     }
-  };
+    setQrError(false);
+
+    QRCode.toDataURL(payload, EVENT_QR_OPTIONS)
+      .then((url) => {
+        if (!cancelled) setQRCode(url);
+      })
+      .catch((error) => {
+        console.error("Error generating QR code:", error.message);
+        if (!cancelled) setQrError(true);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [event?.id]);
 
   const onRowAttend = async (attendeeId, state) => {
     try {
@@ -531,7 +560,7 @@ const ScheduleDetails = () => {
             )}
             <div className="flex gap-x-2">
               <div>
-                <Dialog onOpenChange={generateQRCode}>
+                <Dialog>
                   <DialogTrigger asChild>
                     <Button>
                       <Icon icon={"mingcute:qrcode-2-line"} />
@@ -545,7 +574,22 @@ const ScheduleDetails = () => {
                       </DialogDescription>
                     </DialogHeader>
                     <div className="flex justify-center">
-                      <img src={qrCode} alt="QR Code" className="h-64 w-64" />
+                      {qrError ? (
+                        <p
+                          role="alert"
+                          className="text-center text-sm font-semibold text-red-500"
+                        >
+                          QR code unavailable: this event has no valid ID.
+                        </p>
+                      ) : (
+                        qrCode && (
+                          <img
+                            src={qrCode}
+                            alt="QR Code"
+                            className="h-80 w-80 max-w-full"
+                          />
+                        )
+                      )}
                     </div>
                   </DialogContent>
                 </Dialog>
@@ -673,6 +717,11 @@ const ScheduleDetails = () => {
             </DialogContent>
           </Dialog>
         </div>
+        {volunteersError && (
+          <p role="alert" className="text-sm text-red-500">
+            Couldn&apos;t load volunteers. Please refresh and try again.
+          </p>
+        )}
         {eventVolunteers?.map((volunteer, i) => (
           <div key={i} className="flex gap-2">
             <p>{`${i + 1}.`}</p>
@@ -680,11 +729,11 @@ const ScheduleDetails = () => {
               className={cn("text-primary-text", {
                 "line-through": volunteer.replaced === true,
               })}
-            >{`${volunteer.users.first_name.toFirstUpperCase()} ${volunteer.users.last_name.toFirstUpperCase()} `}</p>
+            >{`${volunteerName(volunteer.users)} `}</p>
             {volunteer?.volunteer_replacement && (
-              <p
-                className={"text-primary-text"}
-              >{`${volunteer?.volunteer_replacement?.first_name.toFirstUpperCase()} ${volunteer?.volunteer_replacement?.last_name.toFirstUpperCase()}`}</p>
+              <p className={"text-primary-text"}>
+                {volunteerName(volunteer.volunteer_replacement)}
+              </p>
             )}
 
             <div className="flex items-center justify-center gap-2">
@@ -719,8 +768,8 @@ const ScheduleDetails = () => {
                     <DialogTitle>
                       Remove
                       {!volunteer?.volunteer_replacement
-                        ? `${volunteer.users.first_name.toFirstUpperCase()} ${volunteer.users.last_name.toFirstUpperCase()} `
-                        : `${volunteer?.volunteer_replacement?.first_name.toFirstUpperCase()} ${volunteer?.volunteer_replacement?.last_name.toFirstUpperCase()}?`}
+                        ? ` ${volunteerName(volunteer.users)} `
+                        : ` ${volunteerName(volunteer.volunteer_replacement)}?`}
                     </DialogTitle>
                     <DialogDescription>
                       Are you sure you want to remove this volunteer?
